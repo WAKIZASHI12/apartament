@@ -21,7 +21,7 @@ from Authentication import urls as auth_urls
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('seting/', include('apartments.urls')),
-    # path('accounts/', include('django.contrib.auth.urls')),
+    path('accounts/', include('django.contrib.auth.urls')),
     # path('accounts/',include('Authentication.urls'))
     path('accounts/', include([
         path('', include('django.contrib.auth.urls')),
