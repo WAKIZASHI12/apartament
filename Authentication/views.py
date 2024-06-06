@@ -1,56 +1,69 @@
-from django.shortcuts import render, redirect
-from django.contrib.auth.models import User
-from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
+from django.shortcuts import render
+from django.contrib.auth import authenticate, login
+from .forms import LoginForm, ProfileEditForm, UserRegistrationForm,UserEditForm
+from .models import Profile
 
+
+def user_login(request):
+    if request.method == 'POST':
+        form = LoginForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            user = authenticate(request,
+                                username=cd['username'],
+                                password=cd['password'])
+            if user is not None:
+                if user.is_active:
+                    login(request, user)
+                    return HttpResponse('Authenticated successfully')
+                else:
+                    return HttpResponse('Disabled account')
+            else:
+                return HttpResponse('Invalid login')
+    else:
+        form = LoginForm()
+        return render(request, 'registration/login.html', {'form': form})
     
+@login_required
+def dashboard(request):
+ return render(request,
+    'registration/dashboard.html',
+     {'section': 'dashboard'})
+
+
+
+
 def register(request):
     if request.method == 'POST':
-        username = request.POST.get('username')
-        email = request.POST.get('email')
-        password1 = request.POST.get('password1')
-        password2 = request.POST.get('password2')
-        
-        if password1 and password2 and password1 == password2:
-            if User.objects.filter(username=username).exists():
-                messages.error(request, 'Имя пользователя уже занято.')
-            elif User.objects.filter(email=email).exists():
-                messages.error(request, 'Этот email уже используется.')
-            else:
-                user = User.objects.create_user(username=username, email=email, password=password1)
-                user.save()
-                messages.success(request, f'Ваш аккаунт был создан! Вы можете войти, {username}.')
-                return redirect('login') 
-        else:
-            messages.error(request, 'Пароли не совпадают.')
-        
-    return render(request, 'register/register.html')
-
-def login_view(request):
-    if request.method == 'POST':
-        username = request.POST.get('username')
-        password = request.POST.get('password')
-        user = authenticate(request, username=username, password=password)
-        if user is not None:
-            login(request, user)
-            return redirect('home')  # Заменить 'home' на имя  URL для домашней страницы
-        else:
-            messages.error(request, 'Неправильное имя пользователя или пароль.')
-    
-    return render(request, 'accounts/login.html')
-def logout_view(request):
-    logout(request)
-    return redirect('login') 
+        user_form = UserRegistrationForm(request.POST)
+        if user_form.is_valid():
+            # Создать новый объект пользователя, но пока не сохранять его
+            new_user = user_form.save(commit=False)
+            # Установить выбранный пароль
+            new_user.set_password(user_form.cleaned_data['password'])
+            # Сохранить объект User
+            new_user.save()
+   
+            # Создать профиль для нового пользователя
+            Profile.objects.create(user=new_user)
+            return render(request, 'registration/register_done.html', {'new_user': new_user})
+    else:
+        user_form = UserRegistrationForm()
+    return render(request, 'registration/register.html', {'user_form': user_form})
 
 @login_required
-def profile(request):
+def edit(request):
     if request.method == 'POST':
-        user = request.user
-        email = request.POST.get('email')
-        if email:
-            user.email = email
-            user.save()
-            messages.success(request, 'Ваш профиль был обновлен!')
-            return redirect('profile')
-    return render(request, 'accounts/profile.html') 
+        user_form = UserEditForm(instance=request.user, data=request.POST)
+        profile_form = ProfileEditForm(instance=request.user.profile, data=request.POST, files=request.FILES)
+        
+        if user_form.is_valid() and profile_form.is_valid():
+            user_form.save()
+            profile_form.save()
+    else:
+        user_form = UserEditForm(instance=request.user)
+        profile_form = ProfileEditForm(instance=request.user.profile)
+    
+    return render(request, 'registration/edit.html', {'user_form': user_form, 'profile_form': profile_form})
